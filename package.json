@@ -1,0 +1,35 @@
+{
+  "name": "supply-chain-tracker",
+  "version": "1.0.0",
+  "description": "Blockchain-based supply chain tracking system using ERC-721 NFTs",
+  "scripts": {
+    "compile": "npx hardhat compile",
+    "test": "npx hardhat test",
+    "test:coverage": "npx hardhat coverage",
+    "deploy:local": "npx hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "npx hardhat run scripts/deploy.js --network sepolia",
+    "node": "npx hardhat node",
+    "backend": "cd backend && npm start",
+    "frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run node\" \"npm run backend\" \"npm run frontend\""
+  },
+  "keywords": [
+    "blockchain",
+    "supply-chain",
+    "ethereum",
+    "nft",
+    "erc721",
+    "solidity"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "concurrently": "^8.2.0",
+    "hardhat": "^2.19.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0",
+    "dotenv": "^16.3.0"
+  }
+}
