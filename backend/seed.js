@@ -32,13 +32,11 @@ console.log(`======================================================\n`);
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/tracex_db';
 
-const categoryTypes = [
-    'Organic Produce',
-    'Specialty Coffee',
-    'Luxury Goods',
-    'Pharmaceuticals',
-    'Electronics',
-    'Cold Chain Logistics'
+const categoryTypes = ['Pharmaceuticals'];
+const medicalProducts = [
+    'Paracetamol Tablets', 'Ibuprofen Tablets', 'Amoxicillin Capsules',
+    'Vitamin D Tablets', 'Cough Syrup', 'Insulin Injection',
+    'ORS Sachets', 'Antacid Tablets'
 ];
 
 async function seedProducts(count = 50) {
@@ -46,116 +44,132 @@ async function seedProducts(count = 50) {
         await mongoose.connect(MONGODB_URI);
         console.log('✅ Connected to MongoDB');
 
-        // Optional: clear existing products? We can just insert. Let's delete existing for a clean demo
-        console.log('🗑️ Clearing existing products...');
+        console.log('🗑️ Clearing existing products and users...');
         await Product.deleteMany({});
+        const User = require('./models/User');
+        await User.deleteMany({});
 
-        // Create directory for QR Code Images
+        // Create mock static chain of users
+        const manufacturer = await User.create({
+            name: 'Farmson Pharmaceutical', email: 'mfg@pharma.com', password: 'password123',
+            role: 'MANUFACTURER', roles: ['MANUFACTURER'], walletAddress: '0x1111111111111111111111111111111111111111',
+            company: 'Farmson', isVerified: true, isActive: true
+        });
+        const distributor = await User.create({
+            name: 'Amol Pharmaceuticals', email: 'dist@pharma.com', password: 'password123',
+            role: 'DISTRIBUTOR', roles: ['DISTRIBUTOR'], walletAddress: '0x2222222222222222222222222222222222222222',
+            company: 'Amol Logistics', isVerified: true, isActive: true
+        });
+        const retailer = await User.create({
+            name: 'Aditya Pharmacy', email: 'retail@pharma.com', password: 'password123',
+            role: 'RETAILER', roles: ['RETAILER'], walletAddress: '0x3333333333333333333333333333333333333333',
+            company: 'Aditya Retail', isVerified: true, isActive: true
+        });
+        const consumer = await User.create({
+            name: 'Divy', email: 'consumer@pharma.com', password: 'password123',
+            role: 'CONSUMER', roles: ['CONSUMER'], walletAddress: '0x4444444444444444444444444444444444444444',
+            company: 'Individual', isVerified: true, isActive: true
+        });
+        console.log('✅ Created mock supply chain users (mfg, dist, retail, consumer) @pharma.com');
+
         const qrDir = path.join(__dirname, 'demo-qrs');
         if (!fs.existsSync(qrDir)) {
             fs.mkdirSync(qrDir);
         } else {
-            // Clean up old QRs
             fs.readdirSync(qrDir).forEach(file => fs.unlinkSync(path.join(qrDir, file)));
         }
 
-        console.log(`🌱 Generating ${count} synthetic products...`);
+        console.log(`🌱 Generating ${count} synthetic medical products...`);
         const productsList = [];
 
         for (let i = 0; i < count; i++) {
             const productId = `TRX-${faker.string.alphanumeric(8).toUpperCase()}`;
-            const category = faker.helpers.arrayElement(categoryTypes);
-            const name = category === 'Specialty Coffee' ? faker.commerce.productName() + ' Beans'
-                : category === 'Organic Produce' ? 'Organic ' + faker.commerce.productName()
-                    : faker.commerce.productName();
+            const name = faker.helpers.arrayElement(medicalProducts);
 
-            // Time logic
-            const createdDate = faker.date.recent({ days: 14 }); // 14 days ago max
-            const inDistDate = new Date(createdDate.getTime() + (2 * 24 * 60 * 60 * 1000)); // 2 days later
-            const inRetailDate = new Date(inDistDate.getTime() + (3 * 24 * 60 * 60 * 1000)); // 3 days later
+            const createdDate = faker.date.recent({ days: 14 });
+            const inDistDate = new Date(createdDate.getTime() + (2 * 24 * 60 * 60 * 1000));
+            const inRetailDate = new Date(inDistDate.getTime() + (3 * 24 * 60 * 60 * 1000));
+            const soldDate = new Date(inRetailDate.getTime() + (1 * 24 * 60 * 60 * 1000));
 
-            // Construct payload URL for the product
             const qrPayload = `${SCAN_URL_BASE}${productId}`;
             const qrCodeDataUrl = await QRCode.toDataURL(qrPayload);
-
-            // Save local PNG image
             await QRCode.toFile(path.join(qrDir, `${productId}.png`), qrPayload);
 
-            const checkpoints = [
-                {
-                    timestamp: createdDate,
-                    location: {
-                        address: faker.location.streetAddress(),
-                        city: faker.location.city(),
-                        country: faker.location.country(),
-                        coordinates: {
-                            lat: faker.location.latitude(),
-                            lng: faker.location.longitude()
-                        }
-                    },
-                    stage: 'Manufactured',
-                    handlerName: faker.company.name(),
-                    handlerEmail: faker.internet.email(),
-                    notes: 'Initial production and packaging completed.',
-                    transactionHash: '0x' + faker.string.hexadecimal({ length: 64, prefix: '' })
-                },
-                {
+            // Determine current stage
+            // We'll distribute them: 20% Manufactured, 30% InDistribution, 30% InRetail, 20% Sold
+            const stageRoll = Math.random();
+            let currentStage = 'Manufactured';
+            let ownerId = manufacturer._id;
+            let currentOwnerWallet = manufacturer.walletAddress;
+
+            const checkpoints = [{
+                timestamp: createdDate,
+                location: { address: 'Plot 14, GIDC', city: 'Ahmedabad', country: 'India', coordinates: { lat: 23.0225, lng: 72.5714 } },
+                stage: 'Manufactured', handler: manufacturer.walletAddress, handlerName: manufacturer.name, handlerEmail: manufacturer.email,
+                notes: 'Manufactured and cleared quality checks.', transactionHash: '0x' + faker.string.hexadecimal({ length: 64, prefix: '' })
+            }];
+
+            if (stageRoll > 0.2) {
+                currentStage = 'InDistribution';
+                ownerId = distributor._id;
+                currentOwnerWallet = distributor.walletAddress;
+                checkpoints.push({
                     timestamp: inDistDate,
-                    location: {
-                        address: faker.location.streetAddress(),
-                        city: faker.location.city(),
-                        country: faker.location.country(),
-                        coordinates: {
-                            lat: faker.location.latitude(),
-                            lng: faker.location.longitude()
-                        }
-                    },
-                    stage: 'InDistribution',
-                    handlerName: faker.company.name() + ' Logistics',
-                    handlerEmail: faker.internet.email(),
-                    notes: 'Loaded onto transit vehicle.',
-                    transactionHash: '0x' + faker.string.hexadecimal({ length: 64, prefix: '' })
-                },
-                {
+                    location: { address: 'Warehouse C', city: 'Mumbai', country: 'India', coordinates: { lat: 19.0760, lng: 72.8777 } },
+                    stage: 'InDistribution', handler: distributor.walletAddress, handlerName: distributor.name, handlerEmail: distributor.email,
+                    notes: 'Received in distribution hub.', transactionHash: '0x' + faker.string.hexadecimal({ length: 64, prefix: '' })
+                });
+            }
+            if (stageRoll > 0.5) {
+                currentStage = 'InRetail';
+                ownerId = retailer._id;
+                currentOwnerWallet = retailer.walletAddress;
+                checkpoints.push({
                     timestamp: inRetailDate,
-                    location: {
-                        address: faker.location.streetAddress(),
-                        city: faker.location.city(),
-                        country: faker.location.country(),
-                        coordinates: {
-                            lat: faker.location.latitude(),
-                            lng: faker.location.longitude()
-                        }
-                    },
-                    stage: 'InRetail',
-                    handlerName: faker.company.name() + ' Store',
-                    handlerEmail: faker.internet.email(),
-                    notes: 'Received at retail outlet. Ready for sale.',
-                    transactionHash: '0x' + faker.string.hexadecimal({ length: 64, prefix: '' })
-                }
-            ];
+                    location: { address: 'Shop 12, Main St', city: 'Delhi', country: 'India', coordinates: { lat: 28.7041, lng: 77.1025 } },
+                    stage: 'InRetail', handler: retailer.walletAddress, handlerName: retailer.name, handlerEmail: retailer.email,
+                    notes: 'Stocked in pharmacy.', transactionHash: '0x' + faker.string.hexadecimal({ length: 64, prefix: '' })
+                });
+            }
+            if (stageRoll > 0.8) {
+                currentStage = 'Sold';
+                ownerId = consumer._id;
+                currentOwnerWallet = consumer.walletAddress;
+                checkpoints.push({
+                    timestamp: soldDate,
+                    location: { address: 'Home', city: 'Delhi', country: 'India', coordinates: { lat: 28.7041, lng: 77.1025 } },
+                    stage: 'Sold', handler: consumer.walletAddress, handlerName: consumer.name, handlerEmail: consumer.email,
+                    notes: 'Purchased by patient.', transactionHash: '0x' + faker.string.hexadecimal({ length: 64, prefix: '' })
+                });
+            }
 
             const newProduct = new Product({
                 productId: productId,
                 tokenId: i + 1000,
                 name: name,
-                description: faker.commerce.productDescription(),
-                category: category,
-                imageUrl: faker.image.urlLoremFlickr({ category: 'product' }),
+                description: 'Medical grade pharmaceutical product with traceable supply chain.',
+                category: 'Pharmaceuticals',
+                imageUrl: 'https://via.placeholder.com/300?text=Medicine', // Simplified for medical mock
                 batchNumber: faker.string.alphanumeric(6).toUpperCase(),
-                currentStage: 'InRetail',
+                currentStage: currentStage,
+                currentOwner: currentOwnerWallet,
+                manufacturer_id: manufacturer._id,
+                distributor_id: distributor._id,
+                retailer_id: retailer._id,
+                consumer_id: consumer._id,
                 manufacturer: {
-                    name: checkpoints[0].handlerName,
-                    email: checkpoints[0].handlerEmail,
-                    location: `${checkpoints[0].location.city}, ${checkpoints[0].location.country}`
+                    walletAddress: manufacturer.walletAddress,
+                    name: manufacturer.name,
+                    email: manufacturer.email,
+                    location: 'Ahmedabad, India'
                 },
                 manufacturingDate: createdDate,
                 manufacturingLocation: checkpoints[0].location,
                 checkpoints: checkpoints,
                 qrCode: qrCodeDataUrl,
                 metadata: {
-                    weight: faker.number.int({ min: 1, max: 100 }) + ' ' + faker.helpers.arrayElement(['kg', 'lbs', 'g']),
-                    certifications: [faker.helpers.arrayElement(['ISO 9001', 'Fair Trade', 'USDA Organic'])],
+                    weight: '500 mg',
+                    certifications: ['FDA Approved', 'ISO 9001'],
                 },
                 isActive: true
             });
@@ -165,9 +179,8 @@ async function seedProducts(count = 50) {
 
         await Product.insertMany(productsList);
 
-        console.log(`✅ Successfully seeded 50 products!`);
+        console.log(`✅ Successfully seeded ${count} products!`);
         console.log(`📁 QR Codes have been generated in: ${qrDir}`);
-        console.log(`To test, open a .png file and scan with your phone.`);
         process.exit(0);
 
     } catch (error) {
