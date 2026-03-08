@@ -39,9 +39,9 @@ const Navbar = () => {
 
   const navLinks = [
     { path: '/', label: 'Home', icon: Blocks },
+    { path: '/scan', label: 'Verify', icon: ScanLine },
     ...(isAuthenticated ? [
       { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { path: '/scan', label: 'Verify', icon: ScanLine },
       ...(isManufacturerOrAdmin ? [{ path: '/create-product', label: 'Create', icon: PlusCircle }] : [])
     ] : [])
   ]
@@ -52,8 +52,8 @@ const Navbar = () => {
       animate={{ y: 0 }}
       transition={{ duration: 0.5, ease: 'easeOut' }}
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled
-          ? 'bg-tracex-darker/90 backdrop-blur-xl border-b border-white/5'
-          : 'bg-transparent'
+        ? 'bg-tracex-darker/90 backdrop-blur-xl border-b border-white/5'
+        : 'bg-transparent'
         }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -88,8 +88,8 @@ const Navbar = () => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                     className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 ${isActive
-                        ? 'text-white'
-                        : 'text-gray-400 hover:text-white'
+                      ? 'text-white'
+                      : 'text-gray-400 hover:text-white'
                       }`}
                   >
                     {isActive && (
@@ -185,8 +185,8 @@ const Navbar = () => {
                       to={link.path}
                       onClick={() => setIsMobileMenuOpen(false)}
                       className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${isActive
-                          ? 'bg-white/10 text-white'
-                          : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        ? 'bg-white/10 text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-white/5'
                         }`}
                     >
                       <Icon className="w-5 h-5" />

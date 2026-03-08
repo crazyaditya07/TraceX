@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { 
-  Package, 
-  MapPin, 
-  User, 
+import {
+  Package,
+  MapPin,
+  User,
   ArrowRight,
   CheckCircle2,
   Clock,
@@ -31,7 +31,7 @@ const ProductCard = ({ product, index = 0 }) => {
       className="group relative"
     >
       <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 to-purple-500/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-      
+
       <div className="relative bg-tracex-card/80 backdrop-blur-xl border border-white/5 rounded-2xl p-5 hover:border-white/10 transition-all duration-300">
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
@@ -46,7 +46,7 @@ const ProductCard = ({ product, index = 0 }) => {
               <p className="text-gray-500 text-sm">#{product.tokenId}</p>
             </div>
           </div>
-          
+
           <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${status.color}/10 border ${status.color}/20`}>
             <StatusIcon className={`w-3.5 h-3.5 ${status.color.replace('bg-', 'text-')}`} />
             <span className={`text-xs font-medium ${status.color.replace('bg-', 'text-')}`}>
@@ -65,7 +65,9 @@ const ProductCard = ({ product, index = 0 }) => {
           <div className="flex items-center gap-2 text-sm">
             <User className="w-4 h-4 text-gray-500" />
             <span className="text-gray-400">Manufacturer:</span>
-            <span className="text-white">{product.manufacturer}</span>
+            <span className="text-white">
+              {typeof product.manufacturer === 'object' ? product.manufacturer?.name : product.manufacturer}
+            </span>
           </div>
           <div className="flex items-center gap-2 text-sm">
             <MapPin className="w-4 h-4 text-gray-500" />
@@ -80,8 +82,8 @@ const ProductCard = ({ product, index = 0 }) => {
             <Clock className="w-4 h-4" />
             <span>{new Date(product.createdAt).toLocaleDateString()}</span>
           </div>
-          
-          <Link to={`/verify?id=${product.id}`}>
+
+          <Link to={`/product/${product.productId}`}>
             <motion.button
               whileHover={{ scale: 1.02, x: 4 }}
               whileTap={{ scale: 0.98 }}

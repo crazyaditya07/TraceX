@@ -145,11 +145,9 @@ productSchema.methods.getVisibleHistory = function (userRoles, userAddress) {
     } else if (roles.includes('MANUFACTURER')) {
         maxVisibleStage = 'Manufactured';
     } else if (roles.includes('CONSUMER')) {
-        // Consumer only sees full history if they own it after purchase
-        if (this.currentOwner?.toLowerCase() === userAddress?.toLowerCase() &&
-            this.currentStage === 'Sold') {
-            maxVisibleStage = 'Sold';
-        }
+        // For standard consumers and guests, they can see the full journey up to its public state
+        // If it's already sold, they see the whole journey.
+        maxVisibleStage = this.currentStage === 'Sold' ? 'Sold' : 'InRetail';
     }
 
     if (!maxVisibleStage) {
