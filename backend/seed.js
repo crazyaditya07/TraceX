@@ -91,7 +91,7 @@ async function seedProducts(count = 50) {
             const inRetailDate = new Date(inDistDate.getTime() + (3 * 24 * 60 * 60 * 1000));
             const soldDate = new Date(inRetailDate.getTime() + (1 * 24 * 60 * 60 * 1000));
 
-            const qrPayload = `${SCAN_URL_BASE}${productId}`;
+            const qrPayload = productId;
             const qrCodeDataUrl = await QRCode.toDataURL(qrPayload);
             await QRCode.toFile(path.join(qrDir, `${productId}.png`), qrPayload);
 

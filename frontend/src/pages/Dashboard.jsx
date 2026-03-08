@@ -91,7 +91,7 @@ const Dashboard = () => {
             name: p.name || p.productId,
             description: p.description || `Batch: ${p.batchNumber}`,
             manufacturer: p.manufacturer || 'Unknown',
-            currentOwner: p.owner || 'You',
+            currentOwner: p.currentOwnerName || p.owner || 'Unknown',
             createdAt: p.timestamp || new Date().toISOString(),
             status: stageMap[p.currentStage] || 'manufactured'
         };

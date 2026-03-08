@@ -49,7 +49,8 @@ router.post('/register', async (req, res) => {
             email: user.email,
             company: user.company,
             role: user.role,
-            roles: user.roles
+            roles: user.roles,
+            walletAddress: user.walletAddress
         };
 
         res.status(201).json(userResponse);
@@ -97,7 +98,8 @@ router.post('/login', async (req, res) => {
             email: user.email,
             company: user.company,
             role: user.role,
-            roles: user.roles
+            roles: user.roles,
+            walletAddress: user.walletAddress
         };
 
         res.json(userResponse);

@@ -150,6 +150,24 @@ router.get('/users', async (req, res) => {
 // Products
 // ============================================
 
+const enrichProducts = (products) => {
+    return products.map(p => {
+        const product = p.toObject ? p.toObject() : p;
+        let ownerName = 'Unknown';
+        if (product.currentStage === 'Manufactured' && product.manufacturer_id && product.manufacturer_id.name) {
+            ownerName = product.manufacturer_id.name;
+        } else if (product.currentStage === 'InDistribution' && product.distributor_id && product.distributor_id.name) {
+            ownerName = product.distributor_id.name;
+        } else if (product.currentStage === 'InRetail' && product.retailer_id && product.retailer_id.name) {
+            ownerName = product.retailer_id.name;
+        } else if (product.currentStage === 'Sold' && product.consumer_id && product.consumer_id.name) {
+            ownerName = product.consumer_id.name;
+        }
+        product.currentOwnerName = ownerName;
+        return product;
+    });
+};
+
 // Get all products with optional filters
 router.get('/products', async (req, res) => {
     try {
@@ -170,6 +188,7 @@ router.get('/products', async (req, res) => {
         if (batchNumber) query.batchNumber = batchNumber;
 
         const products = await Product.find(query)
+            .populate('manufacturer_id distributor_id retailer_id consumer_id', 'name')
             .skip(parseInt(offset))
             .limit(parseInt(limit))
             .sort({ createdAt: -1 });
@@ -177,7 +196,7 @@ router.get('/products', async (req, res) => {
         const total = await Product.countDocuments(query);
 
         res.json({
-            products,
+            products: enrichProducts(products),
             total,
             limit: parseInt(limit),
             offset: parseInt(offset)
@@ -316,8 +335,10 @@ router.get('/owner/:walletAddress/products', async (req, res) => {
                 break;
         }
 
-        const products = await Product.find(query);
-        res.json(products);
+        const products = await Product.find(query)
+            .populate('manufacturer_id distributor_id retailer_id consumer_id', 'name')
+            .sort({ createdAt: -1 });
+        res.json(enrichProducts(products));
     } catch (error) {
         console.error('Get explicit ownership products error:', error);
         res.status(500).json({ error: 'Failed to get products' });
