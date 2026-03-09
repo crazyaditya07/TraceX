@@ -1,9 +1,9 @@
 {
-  "chainId": 31337,
-  "network": "localhost",
+  "chainId": 11155111,
+  "network": "sepolia",
   "contracts": {
     "SupplyChainNFT": {
-      "address": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+      "address": "0xDaea19dE3b36a502eD6F56b53dc878D9428a6618",
       "abi": [
         {
           "inputs": [],
@@ -1403,7 +1403,7 @@
       ]
     },
     "AccessManager": {
-      "address": "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9",
+      "address": "0x658e2D64E475C2312709B4a5d90B98E04581ba2A",
       "abi": [
         {
           "inputs": [],

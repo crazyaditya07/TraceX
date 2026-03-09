@@ -2,6 +2,13 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+
+const generateToken = (id) => {
+    return jwt.sign({ id }, process.env.JWT_SECRET || 'fallback-secret', {
+        expiresIn: '7d',
+    });
+};
 
 // Register new user
 router.post('/register', async (req, res) => {
@@ -42,7 +49,7 @@ router.post('/register', async (req, res) => {
             registeredAt: new Date()
         });
 
-        // Return user without password
+        // Return user with token
         const userResponse = {
             id: user._id,
             name: user.name,
@@ -50,7 +57,8 @@ router.post('/register', async (req, res) => {
             company: user.company,
             role: user.role,
             roles: user.roles,
-            walletAddress: user.walletAddress
+            walletAddress: user.walletAddress,
+            token: generateToken(user._id)
         };
 
         res.status(201).json(userResponse);
@@ -91,7 +99,44 @@ router.post('/login', async (req, res) => {
         user.lastLogin = new Date();
         await user.save();
 
-        // Return user without password
+        // Return user with token
+        const userResponse = {
+            id: user._id,
+            name: user.name,
+            email: user.email,
+            company: user.company,
+            role: user.role,
+            roles: user.roles,
+            walletAddress: user.walletAddress,
+            token: generateToken(user._id)
+        };
+
+        res.json(userResponse);
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ message: 'Failed to login' });
+    }
+});
+
+// Validate session and get current user
+router.get('/me', async (req, res) => {
+    try {
+        let token;
+        if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+            token = req.headers.authorization.split(' ')[1];
+        }
+
+        if (!token) {
+            return res.status(401).json({ message: 'Not authorized, no token' });
+        }
+
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret');
+        const user = await User.findById(decoded.id).select('-password');
+
+        if (!user) {
+            return res.status(401).json({ message: 'User not found' });
+        }
+
         const userResponse = {
             id: user._id,
             name: user.name,
@@ -104,8 +149,8 @@ router.post('/login', async (req, res) => {
 
         res.json(userResponse);
     } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ message: 'Failed to login' });
+        console.error('Session validation error:', error.message);
+        res.status(401).json({ message: 'Not authorized, token failed' });
     }
 });
 

@@ -24,7 +24,7 @@ function QRScanner({ onScan, onError }) {
 
         try {
             setError(null);
-            
+
             // Use a unique element ID to avoid conflicts
             const elementId = 'qr-reader-' + Date.now();
             const element = document.getElementById('qr-reader');
@@ -32,7 +32,7 @@ function QRScanner({ onScan, onError }) {
                 element.id = elementId;
                 elementIdRef.current = elementId;
             }
-            
+
             const html5QrCode = new Html5Qrcode(elementId);
             html5QrCodeRef.current = html5QrCode;
 
@@ -48,10 +48,10 @@ function QRScanner({ onScan, onError }) {
                         facingMode: 'environment'
                     }
                 },
-                (decodedText) => {
+                async (decodedText) => {
                     console.log('QR Code scanned:', decodedText);
+                    await stopScanner();
                     onScan?.(decodedText);
-                    stopScanner();
                 },
                 (errorMessage) => {
                     // Scan failed, ignore continuous failures
@@ -63,38 +63,55 @@ function QRScanner({ onScan, onError }) {
                 setHasPermission(true);
             }
         } catch (err) {
-            console.error('Failed to start scanner:', err);
-            setError(err.message || 'Failed to access camera');
-            setHasPermission(false);
-            onError?.(err);
+            const errString = err.toString ? err.toString() : String(err);
+            const isPermissionError = err.name === 'NotAllowedError' || errString.includes('Permission denied') || errString.includes('NotAllowedError');
+
+            if (isPermissionError) {
+                // User explicitly denied permission, just update state and don't throw to parent as an "app error"
+                setHasPermission(false);
+            } else {
+                console.error('Failed to start scanner:', err);
+                setError(err.message || 'Failed to access camera');
+                setHasPermission(false);
+                onError?.(err);
+            }
         }
     };
 
     const stopScanner = async () => {
         const html5QrCode = html5QrCodeRef.current;
         const elementId = elementIdRef.current;
-        
+
         if (html5QrCode) {
             html5QrCodeRef.current = null;
             try {
+                // Ensure camera hardware stops regardless of component mount status
+                try {
+                    await html5QrCode.stop();
+                } catch (stopErr) {
+                    if (stopErr) {
+                        console.log('Scanner stop warning (ignored):', stopErr.message || stopErr);
+                    }
+                }
+
                 if (elementId) {
                     const element = document.getElementById(elementId);
-                    if (element && html5QrCode.isScanning) {
-                        await html5QrCode.stop();
-                    }
                     if (element && element.parentNode) {
                         try {
+                            // html5QrCode.clear() can throw if not fully initialized, safe to ignore
                             html5QrCode.clear();
                         } catch (clearErr) {
-                            console.log('Scanner clear skipped:', clearErr.message);
+                            // Ignore clear error silently
                         }
                     }
                     // Restore original ID
-                    element.id = 'qr-reader';
+                    if (element) {
+                        element.id = 'qr-reader';
+                    }
                     elementIdRef.current = null;
                 }
             } catch (err) {
-                console.log('Scanner stop error (ignored):', err.message);
+                // Ignore cleanup errors silently
             }
         }
         if (isMountedRef.current) {

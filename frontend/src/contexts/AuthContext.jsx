@@ -11,18 +11,45 @@ export function AuthProvider({ children }) {
 
     // Check for existing session on mount
     useEffect(() => {
-        const session = localStorage.getItem(SESSION_KEY);
-        if (session) {
-            try {
-                const userData = JSON.parse(session);
-                setUser(userData);
-                setIsAuthenticated(true);
-            } catch (err) {
-                console.error('Failed to parse session:', err);
-                localStorage.removeItem(SESSION_KEY);
+        const validateSession = async () => {
+            const session = localStorage.getItem(SESSION_KEY);
+            if (session) {
+                try {
+                    const userData = JSON.parse(session);
+
+                    // If no token, maybe it's old legacy session. Let's force re-login.
+                    if (!userData.token) {
+                        throw new Error('No token found');
+                    }
+
+                    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+                    const response = await fetch(`${API_URL}/auth/me`, {
+                        headers: {
+                            'Authorization': `Bearer ${userData.token}`
+                        }
+                    });
+
+                    if (response.ok) {
+                        const validUser = await response.json();
+                        validUser.token = userData.token; // preserve token
+
+                        setUser(validUser);
+                        setIsAuthenticated(true);
+                        localStorage.setItem(SESSION_KEY, JSON.stringify(validUser));
+                    } else {
+                        throw new Error('Invalid token');
+                    }
+                } catch (err) {
+                    console.error('Session validation failed:', err);
+                    localStorage.removeItem(SESSION_KEY);
+                    setUser(null);
+                    setIsAuthenticated(false);
+                }
             }
-        }
-        setLoading(false);
+            setLoading(false);
+        };
+
+        validateSession();
     }, []);
 
     const login = async (email, password) => {

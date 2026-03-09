@@ -1,20 +1,21 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { 
-  Blocks, 
-  Shield, 
-  Scan, 
-  Zap, 
-  ArrowRight, 
-  Factory, 
-  Truck, 
-  Store, 
+import {
+  Blocks,
+  Shield,
+  Scan,
+  Zap,
+  ArrowRight,
+  Factory,
+  Truck,
+  Store,
   User,
   CheckCircle2,
   Globe,
   Lock
 } from 'lucide-react'
 import AnimatedButton from '../components/AnimatedButton'
+import { useAuth } from '../contexts/AuthContext'
 
 const features = [
   {
@@ -63,6 +64,7 @@ const supplyChainSteps = [
 ]
 
 const Home = () => {
+  const { isAuthenticated } = useAuth();
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
@@ -98,7 +100,7 @@ const Home = () => {
               transition={{ duration: 0.6, delay: 0.2 }}
               className="text-xl text-gray-400 max-w-2xl mx-auto mb-10"
             >
-              Blockchain-powered supply chain tracking. Ensuring transparency, 
+              Blockchain-powered supply chain tracking. Ensuring transparency,
               authenticity, and trust from manufacturer to consumer.
             </motion.p>
 
@@ -166,7 +168,7 @@ const Home = () => {
               Supply Chain Flow
             </h2>
             <p className="text-gray-400 max-w-2xl mx-auto">
-              Products move seamlessly through the supply chain with complete 
+              Products move seamlessly through the supply chain with complete
               transparency and verification at every step.
             </p>
           </motion.div>
@@ -174,7 +176,7 @@ const Home = () => {
           <div className="relative">
             {/* Connection Line */}
             <div className="hidden lg:block absolute top-1/2 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 via-purple-500 via-orange-500 to-green-500 transform -translate-y-1/2" />
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
               {supplyChainSteps.map((step, index) => {
                 const Icon = step.icon
@@ -195,8 +197,8 @@ const Home = () => {
                         initial={{ scale: 0 }}
                         whileInView={{ scale: 1 }}
                         viewport={{ once: true }}
-                        transition={{ 
-                          duration: 0.5, 
+                        transition={{
+                          duration: 0.5,
                           delay: index * 0.15 + 0.2,
                           type: 'spring',
                           stiffness: 200
@@ -205,7 +207,7 @@ const Home = () => {
                       >
                         <Icon className="w-10 h-10 text-white" />
                       </motion.div>
-                      
+
                       <h3 className="text-xl font-semibold text-white mb-2">
                         {step.label}
                       </h3>
@@ -247,7 +249,7 @@ const Home = () => {
               Why Choose TraceX
             </h2>
             <p className="text-gray-400 max-w-2xl mx-auto">
-              Our platform provides everything you need to track, verify, and 
+              Our platform provides everything you need to track, verify, and
               trust your supply chain.
             </p>
           </motion.div>
@@ -278,11 +280,11 @@ const Home = () => {
                     <div className={`w-12 h-12 rounded-xl ${colorVariants[feature.color]} flex items-center justify-center mb-4`}>
                       <Icon className="w-6 h-6" />
                     </div>
-                    
+
                     <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-gradient transition-all">
                       {feature.title}
                     </h3>
-                    
+
                     <p className="text-gray-400 text-sm leading-relaxed">
                       {feature.description}
                     </p>
@@ -307,22 +309,30 @@ const Home = () => {
             {/* Background Effects */}
             <div className="absolute top-0 left-0 w-64 h-64 bg-indigo-500/20 rounded-full blur-3xl -translate-x-1/2 -translate-y-1/2" />
             <div className="absolute bottom-0 right-0 w-64 h-64 bg-purple-500/20 rounded-full blur-3xl translate-x-1/2 translate-y-1/2" />
-            
+
             <div className="relative z-10">
               <h2 className="text-3xl lg:text-4xl font-bold text-white mb-4">
                 Ready to Transform Your Supply Chain?
               </h2>
               <p className="text-gray-400 max-w-xl mx-auto mb-8">
-                Join hundreds of companies already using TraceX to ensure 
+                Join hundreds of companies already using TraceX to ensure
                 transparency and trust in their supply chains.
               </p>
-              
+
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                <Link to="/create">
-                  <AnimatedButton size="lg" icon={ArrowRight}>
-                    Get Started
-                  </AnimatedButton>
-                </Link>
+                {isAuthenticated ? (
+                  <Link to="/dashboard">
+                    <AnimatedButton size="lg" icon={ArrowRight}>
+                      Go to Dashboard
+                    </AnimatedButton>
+                  </Link>
+                ) : (
+                  <Link to="/register">
+                    <AnimatedButton size="lg" icon={ArrowRight}>
+                      Get Started
+                    </AnimatedButton>
+                  </Link>
+                )}
                 <Link to="/verify">
                   <AnimatedButton variant="secondary" size="lg">
                     Learn More

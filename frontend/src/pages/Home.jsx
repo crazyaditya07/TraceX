@@ -9,8 +9,10 @@ import {
     Smartphone
 } from 'lucide-react'
 import AnimatedButton from '../components/AnimatedButton'
+import { useAuth } from '../contexts/AuthContext'
 
 const Home = () => {
+    const { isAuthenticated } = useAuth();
     // Note: copied from pages_new/Home.jsx content and adapted slightly if needed
     // Assuming pages_new/Home.jsx content is correct and compatible
     const containerVariants = {
@@ -91,11 +93,19 @@ const Home = () => {
                             variants={itemVariants}
                             className="flex flex-col sm:flex-row items-center justify-center gap-4"
                         >
-                            <Link to="/register">
-                                <AnimatedButton variant="primary" size="lg" icon={ArrowRight}>
-                                    Start Tracking Now
-                                </AnimatedButton>
-                            </Link>
+                            {isAuthenticated ? (
+                                <Link to="/dashboard">
+                                    <AnimatedButton variant="primary" size="lg" icon={ArrowRight}>
+                                        Go to Dashboard
+                                    </AnimatedButton>
+                                </Link>
+                            ) : (
+                                <Link to="/register">
+                                    <AnimatedButton variant="primary" size="lg" icon={ArrowRight}>
+                                        Get Started
+                                    </AnimatedButton>
+                                </Link>
+                            )}
                             <Link to="/scan">
                                 <AnimatedButton variant="secondary" size="lg" icon={Search}>
                                     Verify Product
