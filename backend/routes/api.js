@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Product = require('../models/Product');
 const Event = require('../models/Event');
+const Transfer = require('../models/Transfer');
 const { ethers } = require('ethers');
 
 // ============================================
@@ -481,6 +482,175 @@ router.get('/stats/:walletAddress', async (req, res) => {
     } catch (error) {
         console.error('Get user stats error:', error);
         res.status(500).json({ error: 'Failed to get statistics' });
+    }
+});
+
+// ============================================
+// Transfers
+// ============================================
+
+// Initiate transfer (Sender)
+router.post('/transfers', async (req, res) => {
+    try {
+        const { productId, tokenId, fromWallet, toWallet, fromRole, toRole, currentStage, nextStage, signature } = req.body;
+
+        // 1. Validate sender owns product
+        const product = await Product.findOne({ tokenId });
+        if (!product) return res.status(404).json({ error: 'Product not found' });
+        if (product.currentOwner.toLowerCase() !== fromWallet.toLowerCase()) {
+            return res.status(403).json({ error: 'Not the current owner' });
+        }
+
+        // 2. Validate no active transfer exists
+        if (product.transferStatus !== 'none') {
+            return res.status(400).json({ error: 'Product already has an active transfer' });
+        }
+
+        // 3. Create Transfer record
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 24); // 24h expiry
+
+        const transfer = new Transfer({
+            productId,
+            tokenId,
+            fromWallet: fromWallet.toLowerCase(),
+            toWallet: toWallet.toLowerCase(),
+            fromRole,
+            toRole,
+            currentStage,
+            nextStage,
+            senderSignature: signature,
+            expiresAt,
+            status: 'pending'
+        });
+
+        await transfer.save();
+
+        // 4. Update Product status
+        product.transferStatus = 'pending';
+        product.pendingTransferId = transfer._id;
+        await product.save();
+
+        // 5. Notify receiver (optional: via socket)
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`user:${toWallet.toLowerCase()}`).emit('transferIncoming', transfer);
+        }
+
+        res.status(201).json(transfer);
+    } catch (error) {
+        console.error('Initiate transfer error:', error);
+        res.status(500).json({ error: 'Failed to initiate transfer' });
+    }
+});
+
+// Get incoming transfers
+router.get('/transfers/incoming/:wallet', async (req, res) => {
+    try {
+        const transfers = await Transfer.find({
+            toWallet: req.params.wallet.toLowerCase(),
+            status: 'pending'
+        }).sort({ createdAt: -1 });
+        res.json(transfers);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get incoming transfers' });
+    }
+});
+
+// Get outgoing transfers
+router.get('/transfers/outgoing/:wallet', async (req, res) => {
+    try {
+        const transfers = await Transfer.find({
+            fromWallet: req.params.wallet.toLowerCase(),
+            status: { $in: ['pending', 'confirmed', 'onchain_processing', 'retrying', 'onchain_failed'] }
+        }).sort({ createdAt: -1 });
+        res.json(transfers);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to get outgoing transfers' });
+    }
+});
+
+// Receiver confirms receipt
+router.patch('/transfers/:id/confirm', async (req, res) => {
+    try {
+        const transfer = await Transfer.findById(req.params.id);
+        if (!transfer) return res.status(404).json({ error: 'Transfer not found' });
+        if (transfer.status !== 'pending') return res.status(400).json({ error: 'Transfer not in pending state' });
+
+        transfer.status = 'confirmed';
+        transfer.confirmedAt = new Date();
+        await transfer.save();
+
+        // Update Product
+        await Product.findOneAndUpdate(
+            { tokenId: transfer.tokenId },
+            { transferStatus: 'confirmed' }
+        );
+
+        // Notify sender to execute on-chain tx
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`user:${transfer.fromWallet.toLowerCase()}`).emit('transferConfirmed', transfer);
+        }
+
+        res.json(transfer);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to confirm receipt' });
+    }
+});
+
+// Receiver rejects transfer
+router.patch('/transfers/:id/reject', async (req, res) => {
+    try {
+        const transfer = await Transfer.findById(req.params.id);
+        if (!transfer) return res.status(404).json({ error: 'Transfer not found' });
+        
+        transfer.status = 'rejected';
+        await transfer.save();
+
+        // Restore Product
+        await Product.findOneAndUpdate(
+            { tokenId: transfer.tokenId },
+            { transferStatus: 'none', pendingTransferId: null }
+        );
+
+        // Notify sender
+        const io = req.app.get('io');
+        if (io) {
+            io.to(`user:${transfer.fromWallet.toLowerCase()}`).emit('transferRejected', transfer);
+        }
+
+        res.json(transfer);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to reject transfer' });
+    }
+});
+
+// Sender submits transaction (mark as processing)
+router.patch('/transfers/:id/submit', async (req, res) => {
+    try {
+        const { txHash } = req.body;
+        const transfer = await Transfer.findById(req.params.id);
+        if (!transfer) return res.status(404).json({ error: 'Transfer not found' });
+
+        transfer.status = 'onchain_processing';
+        transfer.txHash = txHash;
+        transfer.txAttempts.push({
+            txHash,
+            timestamp: new Date(),
+            status: 'submitted'
+        });
+        await transfer.save();
+
+        // Update Product
+        await Product.findOneAndUpdate(
+            { tokenId: transfer.tokenId },
+            { transferStatus: 'onchain_processing' }
+        );
+
+        res.json(transfer);
+    } catch (error) {
+        res.status(500).json({ error: 'Failed to submit transaction' });
     }
 });
 

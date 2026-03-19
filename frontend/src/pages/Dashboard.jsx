@@ -13,6 +13,11 @@ import {
 import DashboardCard from '../components/DashboardCard';
 import ProductCard from '../components/ProductCard';
 import { useAuth } from '../contexts/AuthContext';
+import { useWeb3 } from '../contexts/Web3Context';
+import { useTransferCustody } from '../hooks/useTransferCustody';
+import IncomingTransfers from '../components/IncomingTransfers';
+import TransferModal from '../components/TransferModal';
+import { io } from 'socket.io-client';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -22,51 +27,124 @@ const Dashboard = () => {
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const { isConnected, account } = useWeb3();
+    const { executeTransfer } = useTransferCustody();
+    const [selectedProduct, setSelectedProduct] = useState(null);
+    const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
+    const [socket, setSocket] = useState(null);
 
     // Fetch Logic
     useEffect(() => {
         if (isAuthenticated && user) {
             fetchDashboardData();
+            
+            // Setup socket
+            const newSocket = io(API_URL.replace('/api', ''));
+            const walletAddress = user.walletAddress || user.wallet;
+            if (walletAddress) {
+                newSocket.emit('join', walletAddress.toLowerCase());
+            }
+            setSocket(newSocket);
+
+            return () => newSocket.disconnect();
         }
     }, [isAuthenticated, user]);
+
+    // Handle incoming confirmed transfers for auto-execution
+    useEffect(() => {
+        if (socket && account) {
+            socket.on('transferConfirmed', async (transfer) => {
+                console.log('🔔 Transfer confirmed by receiver! Executing on-chain...', transfer);
+                try {
+                    await executeTransfer(
+                        transfer._id,
+                        transfer.tokenId,
+                        transfer.toWallet,
+                        // Could add location hash here if needed
+                    );
+                    console.log('✅ On-chain transfer successful');
+                    fetchDashboardData(); // Refresh to show processing state
+                } catch (err) {
+                    console.error('Failed to auto-execute transfer:', err);
+                }
+            });
+
+            socket.on('transferIncoming', () => fetchDashboardData());
+            socket.on('transferRejected', () => fetchDashboardData());
+            socket.on('transferExpired', () => fetchDashboardData());
+            socket.on('productTransferred', () => fetchDashboardData());
+
+            return () => {
+                socket.off('transferConfirmed');
+                socket.off('transferIncoming');
+                socket.off('transferRejected');
+                socket.off('transferExpired');
+                socket.off('productTransferred');
+            };
+        }
+    }, [socket, account, executeTransfer]);
 
     const fetchDashboardData = async () => {
         try {
             setLoading(true);
             setError(null);
 
-            let userStats = {
-                ownedProducts: 0,
-                productsManufactured: 0,
-                transfersIn: 0,
-                transfersOut: 0
-            };
-
-            const walletAddress = user.walletAddress || user.wallet;
+            const walletAddress = (user.walletAddress || user.wallet || '').toLowerCase();
+            let fetchedProducts = [];
 
             if (walletAddress) {
-                const userStatsResponse = await fetch(`${API_URL}/api/stats/${walletAddress}`);
-                if (userStatsResponse.ok) {
-                    userStats = await userStatsResponse.json();
-                }
-
                 const productsResponse = await fetch(`${API_URL}/api/owner/${walletAddress}/products`);
                 if (productsResponse.ok) {
-                    const userProducts = await productsResponse.json();
-                    setProducts(userProducts);
-                } else {
-                    setProducts([]);
+                    fetchedProducts = await productsResponse.json();
                 }
             } else {
                 // Email only fallback
                 const productsResponse = await fetch(`${API_URL}/api/products?limit=20`);
                 if (productsResponse.ok) {
                     const data = await productsResponse.json();
-                    setProducts(data.products || []);
-                    userStats.ownedProducts = data.total || 0;
+                    fetchedProducts = data.products || [];
                 }
             }
-            setStats(userStats);
+
+            setProducts(fetchedProducts);
+
+            // Derive stats from the SAME product list (single source of truth)
+            const ownedProducts = fetchedProducts.length;
+            const productsManufactured = fetchedProducts.filter(p => {
+                const mfgWallet = typeof p.manufacturer === 'object'
+                    ? (p.manufacturer?.walletAddress || '').toLowerCase()
+                    : '';
+                return mfgWallet === walletAddress;
+            }).length;
+
+            // Count transfers from checkpoints
+            let transfersIn = 0;
+            let transfersOut = 0;
+            fetchedProducts.forEach(p => {
+                if (p.checkpoints && p.checkpoints.length > 0) {
+                    p.checkpoints.forEach(cp => {
+                        if (cp.handler && cp.handler.toLowerCase() === walletAddress && cp.stage !== 'Manufactured') {
+                            transfersIn++;
+                        }
+                    });
+                }
+            });
+
+            // Get outgoing transfers count from Transfer collection
+            try {
+                const outRes = await fetch(`${API_URL}/api/transfers/outgoing/${walletAddress}`);
+                if (outRes.ok) {
+                    const outData = await outRes.json();
+                    transfersOut = outData.length;
+                }
+            } catch (_) { /* non-critical */ }
+
+            setStats({
+                ownedProducts,
+                productsManufactured,
+                transfersIn,
+                transfersOut
+            });
 
         } catch (err) {
             console.error('Failed to fetch dashboard data:', err);
@@ -88,13 +166,23 @@ const Dashboard = () => {
         return {
             id: p._id,
             tokenId: p.productId,
+            productId: p.productId,
             name: p.name || p.productId,
             description: p.description || `Batch: ${p.batchNumber}`,
             manufacturer: p.manufacturer || 'Unknown',
             currentOwner: p.currentOwnerName || p.owner || 'Unknown',
+            currentOwnerWallet: (p.currentOwner || '').toLowerCase(),
             createdAt: p.timestamp || new Date().toISOString(),
-            status: stageMap[p.currentStage] || 'manufactured'
+            status: stageMap[p.currentStage] || 'manufactured',
+            transferStatus: p.transferStatus,
+            pendingTransferId: p.pendingTransferId,
+            raw: p
         };
+    };
+
+    const handleOpenTransfer = (product) => {
+        setSelectedProduct(product.raw);
+        setIsTransferModalOpen(true);
     };
 
     if (loading) {
@@ -194,7 +282,13 @@ const Dashboard = () => {
                         {products.length > 0 ? (
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 {products.map((product, index) => (
-                                    <ProductCard key={product._id || index} product={mapProduct(product)} index={index} />
+                                    <ProductCard 
+                                        key={product._id || index} 
+                                        product={mapProduct(product)} 
+                                        index={index}
+                                        currentUserWallet={(user?.walletAddress || user?.wallet || '').toLowerCase()}
+                                        onTransfer={() => handleOpenTransfer(mapProduct(product))}
+                                    />
                                 ))}
                             </div>
                         ) : (
@@ -214,6 +308,14 @@ const Dashboard = () => {
                         )}
                     </motion.div>
                 </div>
+
+                {/* Modals */}
+                <TransferModal
+                    isOpen={isTransferModalOpen}
+                    onClose={() => setIsTransferModalOpen(false)}
+                    product={selectedProduct}
+                    onTransferInitiated={fetchDashboardData}
+                />
             </div>
         </div>
     );

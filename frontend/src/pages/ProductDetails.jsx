@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useWeb3 } from '../contexts/Web3Context';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
-import Timeline from '../components/ProductTimeline/Timeline';
+import ProductJourney from '../components/ProductJourney';
 import LocationMap from '../components/Map/LocationMap';
 import QRCode from 'qrcode';
 
@@ -103,6 +103,22 @@ function ProductDetails() {
             month: 'long',
             day: 'numeric'
         });
+    };
+
+    /**
+     * Map string stage from API to integer ID for visualization
+     * Manufactured -> 0
+     * InDistribution -> 1
+     * InRetail -> 2
+     * Sold -> 3
+     */
+    const mapStageToIndex = (stage) => {
+        const s = stage?.toLowerCase() || '';
+        if (s.includes('manufactured')) return 0;
+        if (s.includes('distribution')) return 1;
+        if (s.includes('retail')) return 2;
+        if (s.includes('sold')) return 3;
+        return 0; // Fallback
     };
 
     if (loading) {
@@ -278,9 +294,12 @@ function ProductDetails() {
             {/* Tab Content */}
             <div className="card">
                 {activeTab === 'timeline' && (
-                    <div>
-                        <h3 style={{ marginBottom: 'var(--spacing-6)' }}>Supply Chain Journey</h3>
-                        <Timeline checkpoints={product?.checkpoints || []} />
+                    <div className="py-2">
+                        <ProductJourney 
+                            currentStage={mapStageToIndex(product?.currentStage)} 
+                            checkpoints={product?.checkpoints || []}
+                            isLoading={loading}
+                        />
                     </div>
                 )}
 

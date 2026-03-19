@@ -6,7 +6,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const apiRoutes = require('./routes/api');
 const authRoutes = require('./routes/auth');
-const eventListener = require('./services/eventListener');
+const eventListenerService = require('./services/eventListener');
+const TransferWorker = require('./services/transferWorker');
 
 const app = express();
 const server = http.createServer(app);
@@ -77,7 +78,11 @@ io.on('connection', (socket) => {
 module.exports.io = io;
 
 // Start blockchain event listener
-eventListener.startListening(io);
+eventListenerService.startListening(io);
+
+// Start transfer worker
+const transferWorker = new TransferWorker(io);
+transferWorker.start();
 
 // Start server
 const PORT = process.env.PORT || 5000;

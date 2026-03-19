@@ -117,6 +117,16 @@ const productSchema = new mongoose.Schema({
     isActive: {
         type: Boolean,
         default: true
+    },
+    transferStatus: {
+        type: String,
+        enum: ['none', 'pending', 'confirmed', 'onchain_processing', 'onchain_failed', 'retrying'],
+        default: 'none'
+    },
+    pendingTransferId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Transfer',
+        default: null
     }
 }, {
     timestamps: true

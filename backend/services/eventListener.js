@@ -4,6 +4,7 @@ const path = require('path');
 const Product = require('../models/Product');
 const Event = require('../models/Event');
 const User = require('../models/User');
+const Transfer = require('../models/Transfer');
 
 // Stage mapping from contract enum
 const stageMap = {
@@ -21,12 +22,19 @@ class EventListener {
         this.accessManagerContract = null;
         this.io = null;
         this.isListening = false;
+        this.lastProcessedBlock = 0;
+        this.pollingInterval = null;
+        this.POLL_TIME = 15000; // 15 seconds
     }
 
     async initialize() {
         try {
             // Load deployment info
             const deploymentsPath = path.join(__dirname, '..', '..', 'deployments');
+            if (!fs.existsSync(deploymentsPath)) {
+                console.log('⚠️ Deployments directory not found.');
+                return false;
+            }
             const files = fs.readdirSync(deploymentsPath);
 
             if (files.length === 0) {
@@ -59,6 +67,9 @@ class EventListener {
 
             this.provider = new ethers.JsonRpcProvider(rpcUrl);
 
+            // Get current block to start polling from
+            this.lastProcessedBlock = await this.provider.getBlockNumber();
+
             // Initialize contracts
             this.supplyChainContract = new ethers.Contract(
                 contracts.contracts.SupplyChainNFT.address,
@@ -72,7 +83,7 @@ class EventListener {
                 this.provider
             );
 
-            console.log('✅ Event listener initialized');
+            console.log(`✅ Event listener initialized at block ${this.lastProcessedBlock}`);
             console.log('📍 SupplyChainNFT:', contracts.contracts.SupplyChainNFT.address);
             console.log('📍 AccessManager:', contracts.contracts.AccessManager.address);
 
@@ -98,39 +109,63 @@ class EventListener {
         }
 
         this.isListening = true;
-        console.log('🎧 Starting blockchain event listeners...');
+        console.log(`🎧 Starting blockchain event polling (Interval: ${this.POLL_TIME/1000}s)...`);
 
-        // Listen for ProductMinted events
-        this.supplyChainContract.on('ProductMinted', async (tokenId, productId, batchNumber, manufacturer, timestamp, event) => {
-            console.log('📦 ProductMinted:', productId);
-            await this.handleProductMinted(tokenId, productId, batchNumber, manufacturer, timestamp, event);
-        });
+        // Start polling loop
+        this.pollingInterval = setInterval(() => this.poll(), this.POLL_TIME);
+        
+        // Initial run
+        this.poll();
+    }
 
-        // Listen for CheckpointAdded events
-        this.supplyChainContract.on('CheckpointAdded', async (tokenId, stage, location, handler, timestamp, event) => {
-            console.log('📍 CheckpointAdded:', tokenId.toString());
-            await this.handleCheckpointAdded(tokenId, stage, location, handler, timestamp, event);
-        });
+    async poll() {
+        try {
+            const currentBlock = await this.provider.getBlockNumber();
+            
+            if (currentBlock <= this.lastProcessedBlock) return;
 
-        // Listen for ProductTransferred events
-        this.supplyChainContract.on('ProductTransferred', async (tokenId, from, to, newStage, timestamp, event) => {
-            console.log('🔄 ProductTransferred:', tokenId.toString());
-            await this.handleProductTransferred(tokenId, from, to, newStage, timestamp, event);
-        });
+            const fromBlock = this.lastProcessedBlock + 1;
+            const toBlock = currentBlock;
 
-        // Listen for RoleGrantedToUser events
-        this.supplyChainContract.on('RoleGrantedToUser', async (role, account, sender, event) => {
-            console.log('👤 RoleGranted:', account);
-            await this.handleRoleGranted(role, account, sender, event);
-        });
+            console.log(`🔍 Polling events from block ${fromBlock} to ${toBlock}...`);
 
-        // Listen for ParticipantRegistered events from AccessManager
-        this.accessManagerContract.on('ParticipantRegistered', async (wallet, name, role, timestamp, event) => {
-            console.log('👤 ParticipantRegistered:', wallet);
-            await this.handleParticipantRegistered(wallet, name, role, timestamp, event);
-        });
+            // 1. SupplyChainNFT Events
+            const mintEvents = await this.supplyChainContract.queryFilter('ProductMinted', fromBlock, toBlock);
+            for (const event of mintEvents) {
+                const { tokenId, productId, batchNumber, manufacturer, timestamp } = event.args;
+                await this.handleProductMinted(tokenId, productId, batchNumber, manufacturer, timestamp, event);
+            }
 
-        console.log('✅ Event listeners active');
+            const checkpointEvents = await this.supplyChainContract.queryFilter('CheckpointAdded', fromBlock, toBlock);
+            for (const event of checkpointEvents) {
+                const { tokenId, stage, location, handler, timestamp } = event.args;
+                await this.handleCheckpointAdded(tokenId, stage, location, handler, timestamp, event);
+            }
+
+            const transferEvents = await this.supplyChainContract.queryFilter('LifecycleTransition', fromBlock, toBlock);
+            for (const event of transferEvents) {
+                const { tokenId, from, to, stage, timestamp } = event.args;
+                await this.handleLifecycleTransition(tokenId, from, to, stage, timestamp, event);
+            }
+
+            const roleEvents = await this.supplyChainContract.queryFilter('RoleGrantedToUser', fromBlock, toBlock);
+            for (const event of roleEvents) {
+                const { role, account, sender } = event.args;
+                await this.handleRoleGranted(role, account, sender, event);
+            }
+
+            // 2. AccessManager Events
+            const regEvents = await this.accessManagerContract.queryFilter('ParticipantRegistered', fromBlock, toBlock);
+            for (const event of regEvents) {
+                const { wallet, name, role, timestamp } = event.args;
+                await this.handleParticipantRegistered(wallet, name, role, timestamp, event);
+            }
+
+            this.lastProcessedBlock = toBlock;
+
+        } catch (error) {
+            console.error('❌ Polling error:', error.message);
+        }
     }
 
     async handleProductMinted(tokenId, productId, batchNumber, manufacturer, timestamp, event) {
@@ -256,18 +291,18 @@ class EventListener {
         }
     }
 
-    async handleProductTransferred(tokenId, from, to, newStage, timestamp, event) {
+    async handleLifecycleTransition(tokenId, from, to, stage, timestamp, event) {
         try {
             const txReceipt = await event.getTransactionReceipt();
             const block = await event.getBlock();
-            const stageName = stageMap[Number(newStage)];
+            const stageName = stageMap[Number(stage)];
 
             // Get product ID from tokenId
             const product = await this.supplyChainContract.getProduct(tokenId);
 
-            // Create event record
+            // 1. Create event record
             const eventRecord = new Event({
-                eventType: 'ProductTransferred',
+                eventType: 'LifecycleTransition',
                 productId: product.productId,
                 tokenId: Number(tokenId),
                 from: from.toLowerCase(),
@@ -282,12 +317,29 @@ class EventListener {
 
             await eventRecord.save();
 
-            // Update product owner
+            // 2. Reconcile Transfer model
+            const transfer = await Transfer.findOne({
+                tokenId: Number(tokenId),
+                fromWallet: from.toLowerCase(),
+                toWallet: to.toLowerCase(),
+                status: { $in: ['onchain_processing', 'confirmed', 'pending'] }
+            });
+
+            if (transfer) {
+                transfer.status = 'finalized';
+                transfer.txHash = txReceipt.hash;
+                transfer.finalizedAt = new Date();
+                await transfer.save();
+            }
+
+            // 3. Update Product owner and status
             await Product.findOneAndUpdate(
                 { tokenId: Number(tokenId) },
                 {
                     currentOwner: to.toLowerCase(),
-                    currentStage: stageName
+                    currentStage: stageName,
+                    transferStatus: 'none',
+                    pendingTransferId: null
                 }
             );
 
@@ -297,11 +349,13 @@ class EventListener {
                 productId: product.productId,
                 from: from.toLowerCase(),
                 to: to.toLowerCase(),
-                stage: stageName
+                stage: stageName,
+                status: 'finalized',
+                txHash: txReceipt.hash
             }, [from.toLowerCase(), to.toLowerCase()]);
 
         } catch (error) {
-            console.error('Error handling ProductTransferred:', error);
+            console.error('Error handling LifecycleTransition:', error);
         }
     }
 

@@ -7,7 +7,8 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock,
-  Truck
+  Truck,
+  ArrowRightLeft
 } from 'lucide-react'
 
 const statusConfig = {
@@ -18,9 +19,11 @@ const statusConfig = {
   sold: { label: 'Sold', color: 'bg-green-500', icon: CheckCircle2 },
 }
 
-const ProductCard = ({ product, index = 0 }) => {
+const ProductCard = ({ product, index = 0, onTransfer, currentUserWallet }) => {
   const status = statusConfig[product.status] || statusConfig.manufactured
   const StatusIcon = status.icon
+
+  const isOwner = currentUserWallet && product.currentOwnerWallet === currentUserWallet;
 
   return (
     <motion.div
@@ -40,18 +43,36 @@ const ProductCard = ({ product, index = 0 }) => {
               <Package className="w-6 h-6 text-indigo-400" />
             </div>
             <div>
-              <h3 className="text-white font-semibold group-hover:text-gradient transition-all">
-                {product.name}
-              </h3>
-              <p className="text-gray-500 text-sm">#{product.tokenId}</p>
+              <Link to={`/product/${product.productId}`} className="hover:text-indigo-400 transition-colors">
+                <h3 className="text-white font-semibold hover:text-indigo-400 transition-all">
+                  {product.name}
+                </h3>
+              </Link>
+              <Link to={`/product/${product.productId}`} className="hover:text-indigo-300 transition-colors">
+                <p className="text-gray-500 text-sm hover:text-gray-400">#{product.tokenId}</p>
+              </Link>
             </div>
           </div>
 
-          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${status.color}/10 border ${status.color}/20`}>
-            <StatusIcon className={`w-3.5 h-3.5 ${status.color.replace('bg-', 'text-')}`} />
-            <span className={`text-xs font-medium ${status.color.replace('bg-', 'text-')}`}>
-              {status.label}
-            </span>
+          <div className="flex flex-col items-end gap-2">
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${status.color}/10 border ${status.color}/20`}>
+              <StatusIcon className={`w-3.5 h-3.5 ${status.color.replace('bg-', 'text-')}`} />
+              <span className={`text-xs font-medium ${status.color.replace('bg-', 'text-')}`}>
+                {status.label}
+              </span>
+            </div>
+
+            {/* Transfer Status Badge */}
+            {product.transferStatus && product.transferStatus !== 'none' && (
+              <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider
+                ${product.transferStatus === 'pending' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 
+                  product.transferStatus === 'confirmed' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                  'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 animate-pulse'}`}>
+                {product.transferStatus === 'pending' ? 'Awaiting Receiver' : 
+                 product.transferStatus === 'confirmed' ? 'Awaiting Settlement' : 
+                 'Processing...'}
+              </div>
+            )}
           </div>
         </div>
 
@@ -83,16 +104,47 @@ const ProductCard = ({ product, index = 0 }) => {
             <span>{new Date(product.createdAt).toLocaleDateString()}</span>
           </div>
 
-          <Link to={`/product/${product.productId}`}>
-            <motion.button
-              whileHover={{ scale: 1.02, x: 4 }}
-              whileTap={{ scale: 0.98 }}
-              className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 text-sm font-medium transition-colors"
-            >
-              Verify
-              <ArrowRight className="w-4 h-4" />
-            </motion.button>
-          </Link>
+          <div className="flex items-center gap-3">
+            {product.status !== 'sold' && product.transferStatus === 'none' && (
+              <div className="relative group/tooltip">
+                <motion.button
+                  whileHover={isOwner ? { scale: 1.05 } : {}}
+                  whileTap={isOwner ? { scale: 0.95 } : {}}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (isOwner) onTransfer();
+                  }}
+                  disabled={!isOwner}
+                  className={`flex items-center gap-2 px-3 py-1.5 text-xs font-bold rounded-xl transition-all border 
+                    ${isOwner 
+                      ? 'bg-indigo-600/20 hover:bg-indigo-600 text-indigo-400 hover:text-white border-indigo-500/30' 
+                      : 'bg-gray-800/40 text-gray-500 border-gray-700/50 cursor-not-allowed'
+                    }`}
+                >
+                  <ArrowRightLeft className="w-3.5 h-3.5" />
+                  Transfer
+                </motion.button>
+                
+                {/* Tooltip for non-owners */}
+                {!isOwner && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-max px-2 py-1 bg-gray-900 border border-white/10 text-gray-300 text-[10px] rounded opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none">
+                    You do not own this product
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <Link to={`/product/${product.productId}`}>
+              <motion.button
+                whileHover={{ scale: 1.02, x: 4 }}
+                whileTap={{ scale: 0.98 }}
+                className="flex items-center gap-2 text-indigo-400 hover:text-indigo-300 text-sm font-medium transition-colors"
+              >
+                Verify
+                <ArrowRight className="w-4 h-4" />
+              </motion.button>
+            </Link>
+          </div>
         </div>
       </div>
     </motion.div>
