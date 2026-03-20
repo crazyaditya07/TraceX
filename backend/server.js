@@ -3,10 +3,11 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
+console.log(`🔍 DEBUG: SEPOLIA_RPC_URL length=${process.env.SEPOLIA_RPC_URL?.length}, URL=${process.env.SEPOLIA_RPC_URL}`);
 const { Server } = require('socket.io');
 const apiRoutes = require('./routes/api');
 const authRoutes = require('./routes/auth');
-const eventListenerService = require('./services/eventListener');
+const eventListenerService = require('./listeners/eventListener');
 const TransferWorker = require('./services/transferWorker');
 
 const app = express();
@@ -95,7 +96,7 @@ io.on('connection', (socket) => {
 module.exports.io = io;
 
 // Start blockchain event listener
-eventListenerService.startListening(io);
+eventListenerService.startEventListener(io);
 
 // Start transfer worker
 const transferWorker = new TransferWorker(io);

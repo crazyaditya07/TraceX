@@ -2,9 +2,9 @@
   "network": "sepolia",
   "chainId": 11155111,
   "deployer": "0x3f127F2FfdFE92D2C5BdB075eb0B77682F7B858E",
-  "deployedAt": "2026-03-09T20:13:34.457Z",
+  "deployedAt": "2026-03-20T05:56:01.497Z",
   "contracts": {
-    "AccessManager": "0x658e2D64E475C2312709B4a5d90B98E04581ba2A",
-    "SupplyChainNFT": "0xDaea19dE3b36a502eD6F56b53dc878D9428a6618"
+    "AccessManager": "0x688B05F394cDdE45c2d41967Bb358F638c907034",
+    "SupplyChainNFT": "0xE7756e4346F5CeA0efe74b5430BC4BaA3e6c7Bb8"
   }
 }

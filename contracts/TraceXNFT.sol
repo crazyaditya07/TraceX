@@ -87,6 +87,10 @@ contract SupplyChainNFT is ERC721, ERC721URIStorage, AccessControl {
         address indexed sender
     );
 
+    event TransferredToDistributor(uint256 indexed tokenId, address indexed distributor);
+    event TransferredToRetailer(uint256 indexed tokenId, address indexed retailer);
+    event ProductSold(uint256 indexed tokenId);
+
     constructor() ERC721("SupplyChainProduct", "SCP") {
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
         _grantRole(ADMIN_ROLE, msg.sender);
@@ -235,6 +239,47 @@ contract SupplyChainNFT is ERC721, ERC721URIStorage, AccessControl {
         
         emit ProductTransferred(tokenId, msg.sender, consumer, Stage.Sold, block.timestamp);
         emit CheckpointAdded(tokenId, Stage.Sold, location, consumer, block.timestamp);
+    }
+
+    /**
+     * @dev Transfer product to distributor (Strict Lifecycle)
+     */
+    function transferToDistributor(uint256 tokenId, address distributor) public {
+        require(ownerOf(tokenId) == msg.sender, "Not the owner");
+        require(hasRole(DISTRIBUTOR_ROLE, distributor), "Recipient is not a distributor");
+        
+        _transfer(msg.sender, distributor, tokenId);
+        
+        products[tokenId].currentStage = Stage.InDistribution;
+        products[tokenId].currentOwner = distributor;
+        
+        emit TransferredToDistributor(tokenId, distributor);
+    }
+
+    /**
+     * @dev Transfer product to retailer (Strict Lifecycle)
+     */
+    function transferToRetailer(uint256 tokenId, address retailer) public {
+        require(ownerOf(tokenId) == msg.sender, "Not the owner");
+        require(hasRole(RETAILER_ROLE, retailer), "Recipient is not a retailer");
+        
+        _transfer(msg.sender, retailer, tokenId);
+        
+        products[tokenId].currentStage = Stage.InRetail;
+        products[tokenId].currentOwner = retailer;
+        
+        emit TransferredToRetailer(tokenId, retailer);
+    }
+
+    /**
+     * @dev Mark product as sold (Strict Lifecycle)
+     */
+    function markAsSold(uint256 tokenId) public {
+        require(ownerOf(tokenId) == msg.sender, "Not the owner");
+        
+        products[tokenId].currentStage = Stage.Sold;
+        
+        emit ProductSold(tokenId);
     }
 
     /**

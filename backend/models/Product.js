@@ -64,6 +64,10 @@ const productSchema = new mongoose.Schema({
         enum: ['Created', 'Manufactured', 'InDistribution', 'InRetail', 'Sold'],
         default: 'Created'
     },
+    status: {
+        type: String, // Lifecycle status: IN_TRANSIT, DELIVERED, SOLD
+        default: 'Manufactured'
+    },
     currentOwner: {
         type: String, // wallet address
         lowercase: true

@@ -3,7 +3,7 @@
   "network": "sepolia",
   "contracts": {
     "SupplyChainNFT": {
-      "address": "0xDaea19dE3b36a502eD6F56b53dc878D9428a6618",
+      "address": "0xE7756e4346F5CeA0efe74b5430BC4BaA3e6c7Bb8",
       "abi": [
         {
           "inputs": [],
@@ -298,6 +298,19 @@
               "internalType": "uint256",
               "name": "tokenId",
               "type": "uint256"
+            }
+          ],
+          "name": "ProductSold",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "uint256",
+              "name": "tokenId",
+              "type": "uint256"
             },
             {
               "indexed": true,
@@ -450,6 +463,44 @@
             }
           ],
           "name": "Transfer",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "uint256",
+              "name": "tokenId",
+              "type": "uint256"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "distributor",
+              "type": "address"
+            }
+          ],
+          "name": "TransferredToDistributor",
+          "type": "event"
+        },
+        {
+          "anonymous": false,
+          "inputs": [
+            {
+              "indexed": true,
+              "internalType": "uint256",
+              "name": "tokenId",
+              "type": "uint256"
+            },
+            {
+              "indexed": true,
+              "internalType": "address",
+              "name": "retailer",
+              "type": "address"
+            }
+          ],
+          "name": "TransferredToRetailer",
           "type": "event"
         },
         {
@@ -947,6 +998,19 @@
         {
           "inputs": [
             {
+              "internalType": "uint256",
+              "name": "tokenId",
+              "type": "uint256"
+            }
+          ],
+          "name": "markAsSold",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
               "internalType": "string",
               "name": "productId",
               "type": "string"
@@ -1355,6 +1419,24 @@
               "internalType": "address",
               "name": "distributor",
               "type": "address"
+            }
+          ],
+          "name": "transferToDistributor",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "tokenId",
+              "type": "uint256"
+            },
+            {
+              "internalType": "address",
+              "name": "distributor",
+              "type": "address"
             },
             {
               "internalType": "string",
@@ -1368,6 +1450,24 @@
             }
           ],
           "name": "transferToDistributor",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        },
+        {
+          "inputs": [
+            {
+              "internalType": "uint256",
+              "name": "tokenId",
+              "type": "uint256"
+            },
+            {
+              "internalType": "address",
+              "name": "retailer",
+              "type": "address"
+            }
+          ],
+          "name": "transferToRetailer",
           "outputs": [],
           "stateMutability": "nonpayable",
           "type": "function"
@@ -1403,7 +1503,7 @@
       ]
     },
     "AccessManager": {
-      "address": "0x658e2D64E475C2312709B4a5d90B98E04581ba2A",
+      "address": "0x688B05F394cDdE45c2d41967Bb358F638c907034",
       "abi": [
         {
           "inputs": [],

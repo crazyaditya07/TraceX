@@ -57,14 +57,24 @@ const TransferModal = ({ isOpen, onClose, product, onTransferInitiated }) => {
         setError(null);
 
         try {
-            // STEP 3 - Validate Ownership before call
+            // ========== STEP 1: VERIFY CONTRACT CONNECTION ==========
+            const contract = contracts.supplyChainNFT;
+            if (!contract) {
+                throw new Error("Contract not loaded. Please reconnect your wallet.");
+            }
+            console.log("CONNECTED CONTRACT:", contract.target);
+            console.log("SIGNER ADDRESS:", account);
+            console.log("EXPECTED CONTRACT: 0xE7756e4346F5CeA0efe74b5430BC4BaA3e6c7Bb8");
+
+            // Validate ownership before call
             if (!product.currentOwner || account.toLowerCase() !== product.currentOwner.toLowerCase()) {
                 throw new Error("Unauthorized: Connected wallet is not the owner of this product");
             }
 
             let onChainOwner;
             try {
-                onChainOwner = await contracts.supplyChainNFT.ownerOf(product.tokenId);
+                onChainOwner = await contract.ownerOf(product.tokenId);
+                console.log("ON-CHAIN OWNER:", onChainOwner);
             } catch (verifErr) {
                 console.error("On-chain verification failed:", verifErr);
                 throw new Error("Blockchain verification failed: This product may not exist on the current network.");
@@ -74,39 +84,53 @@ const TransferModal = ({ isOpen, onClose, product, onTransferInitiated }) => {
                 throw new Error(`Unauthorized: You are not the on-chain owner. Current owner: ${onChainOwner.slice(0,6)}...${onChainOwner.slice(-4)}`);
             }
 
-            // STEP 2 - Execute Smart Contract Transfer
+            // ========== STEP 2: EXECUTE SMART CONTRACT TRANSFER ==========
             const location = selectedRecipient.location?.city || "Unknown";
             const notes = `Transferred to ${selectedRecipient.name}`;
             
             let tx;
+            console.log("MetaMask Triggered");
+            console.log(`TRANSFER: tokenId=${product.tokenId}, recipient=${selectedRecipient.walletAddress}, role=${nextRole}`);
+
             if (nextRole === 'DISTRIBUTOR') {
-                tx = await contracts.supplyChainNFT.transferToDistributor(
+                tx = await contract["transferToDistributor(uint256,address)"](
                     product.tokenId,
-                    selectedRecipient.walletAddress,
-                    location,
-                    notes
+                    selectedRecipient.walletAddress
                 );
             } else if (nextRole === 'RETAILER') {
-                tx = await contracts.supplyChainNFT.transferToRetailer(
+                tx = await contract["transferToRetailer(uint256,address)"](
                     product.tokenId,
-                    selectedRecipient.walletAddress,
-                    location,
-                    notes
+                    selectedRecipient.walletAddress
                 );
             } else if (nextRole === 'CONSUMER') {
-                tx = await contracts.supplyChainNFT.sellToConsumer(
-                    product.tokenId,
-                    selectedRecipient.walletAddress,
-                    location,
-                    notes
+                tx = await contract.markAsSold(
+                    product.tokenId
                 );
             } else {
                 throw new Error("Invalid transfer stage.");
             }
 
-            await tx.wait(); // Verify confirmation
+            console.log("TX SUBMITTED:", tx.hash);
+            console.log("⏳ Waiting for confirmation...");
+            const receipt = await tx.wait();
+            console.log("TX SUCCESS:", tx.hash);
+            console.log("BLOCK:", receipt.blockNumber);
+            console.log("GAS USED:", receipt.gasUsed?.toString());
 
-            // STEP 4 - Post-Transaction State Update
+            // Log emitted events from receipt
+            if (receipt.logs && receipt.logs.length > 0) {
+                console.log(`EVENTS EMITTED: ${receipt.logs.length} log(s)`);
+                receipt.logs.forEach((log, i) => {
+                    try {
+                        const parsed = contract.interface.parseLog(log);
+                        if (parsed) {
+                            console.log(`  EVENT[${i}]: ${parsed.name}`, parsed.args);
+                        }
+                    } catch (e) { /* skip unparseable logs */ }
+                });
+            }
+
+            // ========== POST-TRANSACTION: Update backend ==========
             const nextStage = nextRole === 'DISTRIBUTOR' ? 'InDistribution' : nextRole === 'RETAILER' ? 'InRetail' : 'Sold';
             
             await axios.post(`${API_URL}/products/${product.productId}/checkpoints`, {
@@ -122,13 +146,30 @@ const TransferModal = ({ isOpen, onClose, product, onTransferInitiated }) => {
 
             setStep(3); // Success UI
             if (onTransferInitiated) onTransferInitiated();
+
         } catch (err) {
-            console.error('Transfer execution failed:', err);
-            setError(err?.reason || err.message || 'Failed to execute transfer.');
+            // ========== STEP 3: CATEGORIZED ERROR HANDLING ==========
+            console.error("TRANSFER ERROR:", err);
+
+            let userMessage;
+            if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
+                userMessage = "Transaction rejected by user in MetaMask.";
+            } else if (err.code === 'CALL_EXCEPTION') {
+                userMessage = `Transaction failed on-chain: ${err.reason || err.message}`;
+            } else if (err.code === 'NETWORK_ERROR' || err.code === 'SERVER_ERROR') {
+                userMessage = "Network error. Please check your connection and try again.";
+            } else if (err.code === 'INSUFFICIENT_FUNDS') {
+                userMessage = "Insufficient ETH for gas fees.";
+            } else {
+                userMessage = err?.reason || err.message || 'Failed to execute transfer.';
+            }
+
+            setError(userMessage);
         } finally {
             setLoading(false);
         }
     };
+
 
     const getNextStageName = (stage) => {
         const stages = ['Manufactured', 'InDistribution', 'InRetail', 'Sold'];
